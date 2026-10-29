@@ -1,0 +1,83 @@
+i
+AWSTemplateFormatVersion: '2010-09-09'
+Description: S3 bucket with KMS encryption, versioning, and access logging
+
+Parameters:
+  BucketName:
+    Type: String
+    Default: pranjal-test-bucket-with-cf
+
+  AccessLogBucket:
+    Type: String
+    Default: pranjal-test-logging-bucket-cf
+
+  KmsKeyArn:
+    Type: String
+    Default: arn:aws:kms:us-east-1:637156578117:key/1eee816d-7687-4e73-8ad8-a940e94d6b10
+
+Resources:
+
+  # Bucket to store access logs
+  AccessLogBucketResource:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Ref AccessLogBucket
+
+      # Use S3-managed encryption for log delivery
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+
+      # Block public access
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+      # Allow S3 log delivery to write logs
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerPreferred
+
+      AccessControl: LogDeliveryWrite
+
+  # Main application bucket
+  MainBucket:
+    Type: AWS::S3::Bucket
+    DependsOn: AccessLogBucketResource
+    Properties:
+      BucketName: !Ref BucketName
+
+      # KMS encryption using existing key
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: aws:kms
+              KMSMasterKeyID: !Ref KmsKeyArn
+
+      # Enable versioning
+      VersioningConfiguration:
+        Status: Enabled
+
+      # Block public access
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+ 
+      # Send access logs to the new logging bucket
+      LoggingConfiguration:
+        DestinationBucketName: !Ref AccessLogBucketResource
+
+Outputs:
+  MainBucketName:
+    Description: Main application bucket
+    Value: !Ref MainBucket
+
+  AccessLogBucketName:
+    Description: Bucket used to store access logs
+    Value: !Ref AccessLogBucketResource
+
